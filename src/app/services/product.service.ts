@@ -9,8 +9,10 @@ import { Product } from '../products/product.interface';
 export class ProductService {
 
   private baseUrl = 'https://storerestservice.azurewebsites.net/api/products/';
-  products$: Observable<Product[]>;
+  private productsSubject = new BehaviorSubject<Product[]>([]);
+  products$: Observable<Product[]> = this.productsSubject.asObservable();
   mostExpensiveProduct$: Observable<Product>;
+  productsToLoad = 10;
 
   constructor(private http: HttpClient) {
     this.initProducts();
@@ -30,16 +32,26 @@ export class ProductService {
       )
   }
 
-  initProducts() {
-    let url:string = this.baseUrl + `?$orderby=ModifiedDate%20desc`;
+  initProducts(skip = 0, take = this.productsToLoad) {
+    let url = this.baseUrl + `?$skip=${skip}&$top=${take}&$orderby=ModifiedDate%20desc`;
 
-    this.products$ = this
-                      .http
-                      .get<Product[]>(url)
-                      .pipe(
-                        delay(1500), // For demo...
-                        tap(console.table)
-                      );
+    this
+      .http
+      .get<Product[]>(url)
+      .pipe(
+        delay(500), // For demo...
+        tap(console.table),
+        shareReplay(),
+        map(
+          newProducts => {
+            let currentProducts = this.productsSubject.value;
+            return currentProducts.concat(newProducts);
+          }
+        )
+      )
+      .subscribe(
+        fullProductsList => this.productsSubject.next(fullProductsList)
+      );
   }
 
   insertProduct(newProduct: Product): Observable<Product> {
